@@ -651,6 +651,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 // - lần mở đầu tiên của app
 // - mỗi lần app (đã chạy sẵn) nhận yêu cầu mở thêm ảnh qua WM_COPYDATA
 HWND CreateNewViewerWindow(const std::wstring& path) {
+    // 🔧 SỬA: ghi nhận cửa sổ đang active TRƯỚC KHI tạo cửa sổ mới. Nếu đó cũng là
+    // 1 cửa sổ viewer khác của chính app này, sau khi cửa sổ mới lên foreground,
+    // ta sẽ kéo nó lên nằm NGAY SAU cửa sổ mới trong z-order — tránh bị các app
+    // khác (trình duyệt, Explorer...) chen vào giữa khiến nó có cảm giác "rớt xuống đáy".
+    HWND hPrevActive = GetForegroundWindow();
+
     AppState* st = new AppState();
 
     HWND hWnd = CreateWindowExW(0, kClassName, L"My D2D Image Viewer", WS_OVERLAPPEDWINDOW,
@@ -675,6 +681,17 @@ HWND CreateNewViewerWindow(const std::wstring& path) {
     ShowWindow(hWnd, SW_SHOWNORMAL);
     UpdateWindow(hWnd);
     SetForegroundWindow(hWnd);
+
+    // 🆕 Kéo cửa sổ viewer trước đó lên nằm ngay dưới cửa sổ mới (chỉ khi nó thực
+    // sự là 1 cửa sổ của app này, tránh động vào cửa sổ của app khác).
+    if (hPrevActive && hPrevActive != hWnd && IsWindow(hPrevActive)) {
+        wchar_t cls[64] = {};
+        GetClassNameW(hPrevActive, cls, 64);
+        if (wcscmp(cls, kClassName) == 0) {
+            SetWindowPos(hPrevActive, hWnd, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+    }
+
     return hWnd;
 }
 
